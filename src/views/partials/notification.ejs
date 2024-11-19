@@ -1,0 +1,92 @@
+<div id="notification" class="uk-notification uk-notification-top-right" style="display: none;">
+    <div class="uk-notification-message uk-notification-message-primary">
+        <div id="notification-content"></div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    let socket;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+
+    function initializeSocket() {
+        socket = io({
+            reconnection: true,
+            reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+            reconnectionDelay: 1000,
+            timeout: 20000,
+            transports: ['websocket', 'polling']
+        });
+
+        socket.on('connect', () => {
+            console.log('Socket connected:', socket.id);
+            reconnectAttempts = 0;
+        });
+
+        socket.on('notification', (data) => {
+            console.log('Received notification:', data);
+            showNotification(data.message, data.type);
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            showNotification('Error connecting to notification service', 'error');
+            handleReconnect();
+        });
+
+        socket.on('connect_timeout', () => {
+            console.error('Connection timeout');
+            showNotification('Connection timeout', 'error');
+            handleReconnect();
+        });
+
+        socket.on('error', (error) => {
+            console.error('Socket error:', error);
+            showNotification('Notification service error', 'error');
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log('Socket disconnected:', reason);
+            if (reason === 'io server disconnect') {
+                socket.connect();
+            }
+        });
+    }
+
+    function handleReconnect() {
+        reconnectAttempts++;
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            console.log('Max reconnection attempts reached');
+            showNotification('Unable to connect to notification service', 'error');
+        }
+    }
+
+    window.showNotification = function(message, type = 'primary') {
+        const notification = document.getElementById('notification');
+        const content = document.getElementById('notification-content');
+        const messageDiv = notification.querySelector('.uk-notification-message');
+
+        messageDiv.className = 'uk-notification-message';
+        messageDiv.classList.add(`uk-notification-message-${type}`);
+
+        content.textContent = message;
+        notification.style.display = 'block';
+
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 5000);
+    }
+
+    window.getSocket = function() {
+        return socket;
+    }
+
+    initializeSocket();
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && (!socket || !socket.connected)) {
+            initializeSocket();
+        }
+    });
+</script>
